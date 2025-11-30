@@ -167,3 +167,10 @@ pytest tests/ -v
 ## License
 
 MIT License
+
+---
+
+## 文档 | Documentation
+
+- [用户手册 (User Manual)](docs/USER_MANUAL.md) - 详细的使用指南
+- [架构设计 (Architecture)](docs/ARCHITECTURE.md) - 系统架构和技术设计
