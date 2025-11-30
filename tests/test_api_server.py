@@ -98,10 +98,7 @@ class TestAPIServer:
             },
         )
         
-        response = client.post(
-            "/context",
-            params={"query": "context test", "top_k": 1},
-        )
+        response = client.post("/context?query=context+test&top_k=1")
         
         assert response.status_code == 200
         assert "context" in response.json()
