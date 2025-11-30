@@ -28,6 +28,16 @@ class Settings(BaseSettings):
         description="Sentence transformer model name"
     )
     
+    # Reranker settings
+    use_reranker: bool = Field(
+        default=False,
+        description="Whether to use reranking by default"
+    )
+    reranker_model: str = Field(
+        default="ms-marco-MiniLM-L-6-v2",
+        description="Reranker model name (see docs for available models)"
+    )
+    
     # Server settings
     host: str = Field(default="0.0.0.0", description="Server host")
     port: int = Field(default=8000, description="Server port")

@@ -10,6 +10,7 @@ from sentence_transformers import SentenceTransformer
 
 from knowledge_server.vector_db.vector_store import VectorStore
 from knowledge_server.graph_db.graph_store import GraphStore
+from knowledge_server.rag.reranker import Reranker, DEFAULT_RERANKER_MODEL
 
 
 class RAGEngine:
@@ -20,6 +21,8 @@ class RAGEngine:
         vector_store: VectorStore,
         graph_store: GraphStore,
         embedding_model: str = "all-MiniLM-L6-v2",
+        reranker_model: Optional[str] = None,
+        use_reranker: bool = False,
     ):
         """
         Initialize the RAG engine.
@@ -28,10 +31,20 @@ class RAGEngine:
             vector_store: VectorStore instance for similarity search.
             graph_store: GraphStore instance for knowledge graph queries.
             embedding_model: Name of the sentence transformer model.
+            reranker_model: Name of the reranker model (see Reranker.list_available_models()).
+            use_reranker: Whether to use reranking by default.
         """
         self.vector_store = vector_store
         self.graph_store = graph_store
         self.embedding_model = SentenceTransformer(embedding_model)
+        self.use_reranker = use_reranker
+        self.reranker: Optional[Reranker] = None
+        
+        # Initialize reranker if requested
+        if use_reranker or reranker_model:
+            self.reranker = Reranker(
+                model_name=reranker_model or DEFAULT_RERANKER_MODEL
+            )
     
     def embed_text(self, text: str) -> np.ndarray:
         """
@@ -103,6 +116,8 @@ class RAGEngine:
         query: str,
         top_k: int = 5,
         include_graph_context: bool = True,
+        use_reranker: Optional[bool] = None,
+        rerank_top_k: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve relevant documents for a query.
@@ -111,13 +126,24 @@ class RAGEngine:
             query: Search query.
             top_k: Number of results to return.
             include_graph_context: Whether to include related entities.
+            use_reranker: Whether to use reranking. Defaults to self.use_reranker.
+            rerank_top_k: Number of candidates to fetch for reranking (default: top_k * 3).
             
         Returns:
             List of retrieval results with content and metadata.
         """
+        # Determine if we should use reranking
+        should_rerank = use_reranker if use_reranker is not None else self.use_reranker
+        should_rerank = should_rerank and self.reranker is not None
+        
+        # If reranking, fetch more candidates
+        fetch_k = top_k
+        if should_rerank:
+            fetch_k = rerank_top_k or (top_k * 3)
+        
         # Vector similarity search
         query_embedding = self.embed_text(query)
-        vector_results = self.vector_store.search(query_embedding, top_k)
+        vector_results = self.vector_store.search(query_embedding, fetch_k)
         
         results = []
         for id_, score, text in vector_results:
@@ -133,6 +159,10 @@ class RAGEngine:
                 result["entities"] = []
             
             results.append(result)
+        
+        # Apply reranking if enabled
+        if should_rerank and results:
+            results = self.reranker.rerank_results(query, results, top_k=top_k)
         
         return results
     

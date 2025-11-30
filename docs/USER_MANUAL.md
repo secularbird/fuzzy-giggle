@@ -320,7 +320,8 @@ POST /search
     "query": "string",
     "top_k": 5,
     "include_graph": true,
-    "entity_name": "string (可选)"
+    "entity_name": "string (可选)",
+    "use_reranker": true
 }
 ```
 
@@ -332,10 +333,43 @@ POST /search
             "id": 123456,
             "score": 0.95,
             "content": "相关文档内容...",
-            "entities": []
+            "entities": [],
+            "original_score": 0.82,
+            "reranked": true
         }
     ],
     "graph_results": {}
+}
+```
+
+#### 获取可用重排序模型
+
+```http
+GET /rerankers
+```
+
+**响应示例:**
+```json
+{
+    "available_models": {
+        "ms-marco-MiniLM-L-6-v2": {
+            "name": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+            "description": "Fast and efficient, good for general use (22M params)",
+            "max_length": 512
+        },
+        "bge-reranker-base": {
+            "name": "BAAI/bge-reranker-base",
+            "description": "Good balance of performance and accuracy (278M params)",
+            "max_length": 512
+        }
+    },
+    "current_model": {
+        "model_name": "ms-marco-MiniLM-L-6-v2",
+        "name": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        "description": "Fast and efficient, good for general use (22M params)",
+        "max_length": 512
+    },
+    "reranking_enabled": true
 }
 ```
 
@@ -395,10 +429,22 @@ POST /scrape
 | `KNOWLEDGE_VECTOR_DIMENSION` | 向量维度 | `384` |
 | `KNOWLEDGE_VECTOR_METRIC` | 距离度量方式 | `cos` |
 | `KNOWLEDGE_EMBEDDING_MODEL` | 嵌入模型名称 | `all-MiniLM-L6-v2` |
+| `KNOWLEDGE_USE_RERANKER` | 是否启用重排序 | `false` |
+| `KNOWLEDGE_RERANKER_MODEL` | 重排序模型名称 | `ms-marco-MiniLM-L-6-v2` |
 | `KNOWLEDGE_HOST` | 服务器主机 | `0.0.0.0` |
 | `KNOWLEDGE_PORT` | 服务器端口 | `8000` |
 | `KNOWLEDGE_SCRAPE_DELAY` | 抓取请求间隔(秒) | `1.0` |
 | `KNOWLEDGE_SCRAPE_CONCURRENT` | 并发抓取数 | `4` |
+
+### 可用重排序模型
+
+| 模型名称 | 参数量 | 说明 |
+|----------|--------|------|
+| `ms-marco-MiniLM-L-6-v2` | 22M | 快速高效，适合通用场景 |
+| `ms-marco-MiniLM-L-12-v2` | 33M | 比 L-6 更准确，仍然很快 |
+| `bge-reranker-base` | 278M | 性能与准确度平衡 |
+| `bge-reranker-large` | 560M | 高准确度，适合质量要求高的场景 |
+| `bge-reranker-v2-m3` | - | 多语言支持，适合中文等语言 |
 
 ### 配置文件
 
@@ -407,6 +453,8 @@ POST /scrape
 ```env
 KNOWLEDGE_DATA_DIR=./data
 KNOWLEDGE_EMBEDDING_MODEL=all-MiniLM-L6-v2
+KNOWLEDGE_USE_RERANKER=true
+KNOWLEDGE_RERANKER_MODEL=ms-marco-MiniLM-L-6-v2
 KNOWLEDGE_HOST=0.0.0.0
 KNOWLEDGE_PORT=8000
 ```
@@ -429,6 +477,24 @@ A: 检查以下几点:
 1. 确保文档内容足够丰富
 2. 尝试更换嵌入模型
 3. 调整 `top_k` 参数获取更多结果
+4. 启用重排序功能提高结果质量
+
+### Q: 如何启用重排序?
+
+A: 有两种方式:
+
+1. 全局启用 (环境变量):
+```bash
+export KNOWLEDGE_USE_RERANKER=true
+export KNOWLEDGE_RERANKER_MODEL=bge-reranker-base
+```
+
+2. 单次请求启用:
+```bash
+curl -X POST http://localhost:8000/search \
+    -H "Content-Type: application/json" \
+    -d '{"query": "人工智能", "top_k": 5, "use_reranker": true}'
+```
 
 ### Q: 如何备份数据?
 

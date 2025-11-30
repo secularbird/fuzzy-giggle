@@ -51,6 +51,7 @@ class SearchRequest(BaseModel):
     top_k: int = Field(5, description="Number of results to return")
     include_graph: bool = Field(True, description="Include graph context")
     entity_name: Optional[str] = Field(None, description="Entity name to search")
+    use_reranker: Optional[bool] = Field(None, description="Use reranking (overrides default)")
 
 
 class ScrapeRequest(BaseModel):
@@ -69,6 +70,8 @@ class RetrievalResult(BaseModel):
     score: float
     content: Optional[str]
     entities: Optional[List[Dict[str, Any]]] = None
+    original_score: Optional[float] = None
+    reranked: Optional[bool] = None
 
 
 class SearchResponse(BaseModel):
@@ -104,7 +107,17 @@ async def lifespan(app: FastAPI):
     
     vector_store = VectorStore(dimension=384, db_path=vector_path)
     graph_store = GraphStore(graph_path)
-    rag_engine = RAGEngine(vector_store, graph_store)
+    
+    # Get reranker settings from environment
+    use_reranker = os.environ.get("KNOWLEDGE_USE_RERANKER", "false").lower() == "true"
+    reranker_model = os.environ.get("KNOWLEDGE_RERANKER_MODEL", "ms-marco-MiniLM-L-6-v2")
+    
+    rag_engine = RAGEngine(
+        vector_store, 
+        graph_store,
+        use_reranker=use_reranker,
+        reranker_model=reranker_model if use_reranker else None,
+    )
     
     yield
     
@@ -238,6 +251,7 @@ async def search(request: SearchRequest) -> SearchResponse:
             query=request.query,
             top_k=request.top_k,
             include_graph_context=request.include_graph,
+            use_reranker=request.use_reranker,
         )
         
         results = [
@@ -246,6 +260,8 @@ async def search(request: SearchRequest) -> SearchResponse:
                 score=r["score"],
                 content=r.get("content"),
                 entities=r.get("entities"),
+                original_score=r.get("original_score"),
+                reranked=r.get("reranked"),
             )
             for r in vector_results
         ]
@@ -302,6 +318,24 @@ def run_server(host: str = "0.0.0.0", port: int = 8000) -> None:
     """Run the knowledge server."""
     import uvicorn
     uvicorn.run(app, host=host, port=port)
+
+
+@app.get("/rerankers")
+async def list_rerankers() -> Dict[str, Any]:
+    """List available reranker models and current configuration."""
+    from knowledge_server.rag.reranker import Reranker, RERANKER_MODELS
+    
+    engine = get_rag_engine()
+    
+    current_model = None
+    if engine.reranker:
+        current_model = engine.reranker.get_model_info()
+    
+    return {
+        "available_models": RERANKER_MODELS,
+        "current_model": current_model,
+        "reranking_enabled": engine.use_reranker,
+    }
 
 
 if __name__ == "__main__":

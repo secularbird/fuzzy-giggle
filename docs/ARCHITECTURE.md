@@ -230,10 +230,12 @@ class GraphStore:
 **职责:**
 - 文本嵌入生成
 - 混合检索 (向量 + 图)
+- 结果重排序
 - 上下文构建
 
 **技术栈:**
 - sentence-transformers: 文本嵌入模型
+- cross-encoder: 重排序模型
 - NumPy: 向量运算
 
 **核心接口:**
@@ -242,12 +244,41 @@ class RAGEngine:
     def embed_text(text) -> np.ndarray
     def embed_texts(texts) -> np.ndarray
     def add_document(doc_id, title, content, url, entities) -> None
-    def retrieve(query, top_k, include_graph_context) -> List[Dict]
+    def retrieve(query, top_k, include_graph_context, use_reranker) -> List[Dict]
     def retrieve_with_graph(query, entity_name, top_k) -> Dict
     def get_context(query, top_k, max_tokens) -> str
 ```
 
-### 5. 网页抓取 (scrapy_server/)
+### 5. 重排序器 (rag/reranker.py)
+
+**职责:**
+- 使用交叉编码器对检索结果进行精排
+- 提高检索质量
+
+**技术栈:**
+- sentence-transformers CrossEncoder: 交叉编码器模型
+
+**支持的模型:**
+
+| 模型 | 参数量 | 特点 |
+|------|--------|------|
+| cross-encoder/ms-marco-MiniLM-L-6-v2 | 22M | 快速高效，推荐通用场景 |
+| cross-encoder/ms-marco-MiniLM-L-12-v2 | 33M | 更高准确度 |
+| BAAI/bge-reranker-base | 278M | 性能与准确度平衡 |
+| BAAI/bge-reranker-large | 560M | 最高准确度 |
+| BAAI/bge-reranker-v2-m3 | - | 多语言支持 (含中文) |
+
+**核心接口:**
+```python
+class Reranker:
+    def rerank(query, documents, top_k) -> List[Tuple[int, float, str]]
+    def rerank_results(query, results, content_key, top_k) -> List[Dict]
+    @staticmethod
+    def list_available_models() -> Dict[str, Dict[str, str]]
+    def get_model_info() -> Dict[str, Any]
+```
+
+### 6. 网页抓取 (scrapy_server/)
 
 **职责:**
 - URL 验证 (防止 SSRF)
