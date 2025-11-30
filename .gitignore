@@ -117,3 +117,8 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/src-tauri/target/
